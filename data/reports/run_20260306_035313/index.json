@@ -1,0 +1,234 @@
+{
+  "generated_at": "2026-03-06T04:18:12.209987+00:00",
+  "total": 20,
+  "confirmed": 5,
+  "by_severity": {
+    "CRITICAL": 0,
+    "HIGH": 1,
+    "MEDIUM": 5,
+    "LOW": 0,
+    "INFORMATIONAL": 14
+  },
+  "reports": [
+    {
+      "report_id": "__nf_tables_abort_dada1b00",
+      "title": "[HIGH] Use After Free in __nf_tables_abort (CWE-416)",
+      "severity": "HIGH",
+      "cvss_score": 7.8,
+      "cwe_id": "CWE-416",
+      "function_name": "__nf_tables_abort",
+      "file_path": "net/netfilter/nf_tables_api.c",
+      "is_verified": true,
+      "path": "data/reports/run_20260306_035313/HIGH/report___nf_tables_abort_dada1b00.json"
+    },
+    {
+      "report_id": "ip_vs_sync_conn_08abbc1d",
+      "title": "[MEDIUM] Heap Buffer Overflow + Type Confusion + Toctou Race in ip_vs_sync_conn (CWE-362)",
+      "severity": "MEDIUM",
+      "cvss_score": 6.3,
+      "cwe_id": "CWE-362",
+      "function_name": "ip_vs_sync_conn",
+      "file_path": "net/netfilter/ipvs/ip_vs_sync.c",
+      "is_verified": true,
+      "path": "data/reports/run_20260306_035313/MEDIUM/report_ip_vs_sync_conn_08abbc1d.json"
+    },
+    {
+      "report_id": "ip_vs_proc_conn_5ae76c1b",
+      "title": "[MEDIUM] Use After Free in ip_vs_proc_conn (CWE-362)",
+      "severity": "MEDIUM",
+      "cvss_score": 4.8,
+      "cwe_id": "CWE-362",
+      "function_name": "ip_vs_proc_conn",
+      "file_path": "net/netfilter/ipvs/ip_vs_sync.c",
+      "is_verified": true,
+      "path": "data/reports/run_20260306_035313/MEDIUM/report_ip_vs_proc_conn_5ae76c1b.json"
+    },
+    {
+      "report_id": "nf_tables_addchain_2508a9e0",
+      "title": "[MEDIUM] Use After Free in nf_tables_addchain (CWE-401)",
+      "severity": "MEDIUM",
+      "cvss_score": 4.4,
+      "cwe_id": "CWE-401",
+      "function_name": "nf_tables_addchain",
+      "file_path": "net/netfilter/nf_tables_api.c",
+      "is_verified": true,
+      "path": "data/reports/run_20260306_035313/MEDIUM/report_nf_tables_addchain_2508a9e0.json"
+    },
+    {
+      "report_id": "ctnetlink_alloc_filter_057f1ff0",
+      "title": "[MEDIUM] Logic Bug / Wrong Flags Passed To Ctnetlink Parse Tuple Filter in ctnetlink_alloc_filter (CWE-269)",
+      "severity": "MEDIUM",
+      "cvss_score": 4.4,
+      "cwe_id": "CWE-269",
+      "function_name": "ctnetlink_alloc_filter",
+      "file_path": "net/netfilter/nf_conntrack_netlink.c",
+      "is_verified": true,
+      "path": "data/reports/run_20260306_035313/MEDIUM/report_ctnetlink_alloc_filter_057f1ff0.json"
+    },
+    {
+      "report_id": "nft_flow_rule_create_de953929",
+      "title": "[MEDIUM] Heap Buffer Overflow / Out-Of-Bounds Write (P2/P3) in nft_flow_rule_create (CWE-787)",
+      "severity": "MEDIUM",
+      "cvss_score": 4.4,
+      "cwe_id": "CWE-787",
+      "function_name": "nft_flow_rule_create",
+      "file_path": "net/netfilter/nf_tables_offload.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/MEDIUM/report_nft_flow_rule_create_de953929.json"
+    },
+    {
+      "report_id": "nft_add_set_elem_e4093123",
+      "title": "[INFORMATIONAL] Use After Free in nft_add_set_elem (CWE-416)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-416",
+      "function_name": "nft_add_set_elem",
+      "file_path": "net/netfilter/nf_tables_api.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_nft_add_set_elem_e4093123.json"
+    },
+    {
+      "report_id": "ip_vs_conn_new_88191c70",
+      "title": "[INFORMATIONAL] Use After Free in ip_vs_conn_new (CWE-416)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-416",
+      "function_name": "ip_vs_conn_new",
+      "file_path": "net/netfilter/ipvs/ip_vs_conn.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_ip_vs_conn_new_88191c70.json"
+    },
+    {
+      "report_id": "start_sync_thread_4331aa9e",
+      "title": "[INFORMATIONAL] Use After Free + Off By One In Cleanup in start_sync_thread (CWE-119)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-119",
+      "function_name": "start_sync_thread",
+      "file_path": "net/netfilter/ipvs/ip_vs_sync.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_start_sync_thread_4331aa9e.json"
+    },
+    {
+      "report_id": "IPSET_TOKEN_6a9afaab",
+      "title": "[INFORMATIONAL] Use After Free + Heap Buffer Overflow in IPSET_TOKEN (CWE-362)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-362",
+      "function_name": "IPSET_TOKEN",
+      "file_path": "net/netfilter/ipset/ip_set_hash_gen.h",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_IPSET_TOKEN_6a9afaab.json"
+    },
+    {
+      "report_id": "__nf_queue_727f94fb",
+      "title": "[INFORMATIONAL] Use After Free in __nf_queue (CWE-362)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-362",
+      "function_name": "__nf_queue",
+      "file_path": "net/netfilter/nf_queue.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report___nf_queue_727f94fb.json"
+    },
+    {
+      "report_id": "nfnl_cthelper_create_45176071",
+      "title": "[INFORMATIONAL] Heap Buffer Overflow + Missing Bounds Check in nfnl_cthelper_create (CWE-476)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-476",
+      "function_name": "nfnl_cthelper_create",
+      "file_path": "net/netfilter/nfnetlink_cthelper.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_nfnl_cthelper_create_45176071.json"
+    },
+    {
+      "report_id": "nf_nat_register_fn_2a74bb56",
+      "title": "[INFORMATIONAL] Out Of Bounds Array Access in nf_nat_register_fn (CWE-119)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-119",
+      "function_name": "nf_nat_register_fn",
+      "file_path": "net/netfilter/nf_nat_core.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_nf_nat_register_fn_2a74bb56.json"
+    },
+    {
+      "report_id": "nft_expr_init_8a24d253",
+      "title": "[INFORMATIONAL] Use After Free in nft_expr_init (CWE-416)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-416",
+      "function_name": "nft_expr_init",
+      "file_path": "net/netfilter/nf_tables_api.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_nft_expr_init_8a24d253.json"
+    },
+    {
+      "report_id": "nf_flow_offload_rule_alloc_fc212e67",
+      "title": "[INFORMATIONAL] Use After Free in nf_flow_offload_rule_alloc (CWE-416)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-416",
+      "function_name": "nf_flow_offload_rule_alloc",
+      "file_path": "net/netfilter/nf_flow_table_offload.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_nf_flow_offload_rule_alloc_fc212e67.json"
+    },
+    {
+      "report_id": "htable_create_cf4e2c7f",
+      "title": "[INFORMATIONAL] Use After Free in htable_create (CWE-362)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-362",
+      "function_name": "htable_create",
+      "file_path": "net/netfilter/xt_hashlimit.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_htable_create_cf4e2c7f.json"
+    },
+    {
+      "report_id": "ip_set_create_f55b8df8",
+      "title": "[INFORMATIONAL] Use After Free + Heap Buffer Overflow in ip_set_create (CWE-362)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-362",
+      "function_name": "ip_set_create",
+      "file_path": "net/netfilter/ipset/ip_set_core.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_ip_set_create_f55b8df8.json"
+    },
+    {
+      "report_id": "ip_vs_conn_expire_69d2285c",
+      "title": "[INFORMATIONAL] Use After Free in ip_vs_conn_expire (CWE-416)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "CWE-416",
+      "function_name": "ip_vs_conn_expire",
+      "file_path": "net/netfilter/ipvs/ip_vs_conn.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_ip_vs_conn_expire_69d2285c.json"
+    },
+    {
+      "report_id": "insert_tree_39af5388",
+      "title": "[INFORMATIONAL] Parse Error in insert_tree (unknown)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "unknown",
+      "function_name": "insert_tree",
+      "file_path": "net/netfilter/nf_conncount.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_insert_tree_39af5388.json"
+    },
+    {
+      "report_id": "pipapo_clone_38ffb60c",
+      "title": "[INFORMATIONAL] Parse Error in pipapo_clone (unknown)",
+      "severity": "INFORMATIONAL",
+      "cvss_score": 0.0,
+      "cwe_id": "unknown",
+      "function_name": "pipapo_clone",
+      "file_path": "net/netfilter/nft_set_pipapo.c",
+      "is_verified": false,
+      "path": "data/reports/run_20260306_035313/INFORMATIONAL/report_pipapo_clone_38ffb60c.json"
+    }
+  ]
+}
