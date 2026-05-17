@@ -797,11 +797,4 @@ rich                     # optional — enables live mapping display
 - **Embedding-based CVE-anchored retrieval.** For each current function,
   retrieve K-nearest neighbors among pre-fix functions; high similarity
   raises the prior.
-
----
-
-## License
-
-[Add a license file before publishing. MIT or Apache-2.0 are conventional for
-research code; the kernel's GPL does not extend to tools that merely *analyze*
-kernel source without linking against it.]
+]
