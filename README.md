@@ -6,9 +6,9 @@ writing Python that executes in a persistent sandbox, reads kernel source on
 demand, and produces verified findings with CVSS scores and compilable crash
 reproducers.
 
-> **Status:** This was developed solely by me as a research project on nights and weekends. Output is a
+> **Status:** Single-author research project, nights and weekends. Output is a
 > prioritized list of candidates for human review, not ground truth. False
-> positives may be exepected and human verification is still needed.
+> positives are expected; severity is best-effort.
 
 ---
 
@@ -36,7 +36,7 @@ call graph and then read the relevant source.
 ## Methodology grounding
 
 The 7-pattern `CVE_TAXONOMY` in [config.py](config.py) is not ad-hoc — it
-was derived from a manual analysis of **19 Linux kernel
+was derived from a manual line-by-line analysis of **19 Linux kernel
 security patch diffs**, abstracting the call-graph signature each bug
 class leaves behind. The full analysis is in
 [docs/Linux Kernel CVE Analysis v2.pdf](docs/Linux%20Kernel%20CVE%20Analysis%20v2.pdf).
@@ -124,11 +124,12 @@ sudo apt install cscope exuberant-ctags
 git clone --depth 1 --branch v5.10 \
     https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git ~/linux
 
-# 4. Build the cscope database in the kernel tree. The -c flag is important:
-#    it produces an uncompressed cross-reference, which lets KernelSurgeon
-#    parse the database in a single pass (seconds) instead of falling back
-#    to per-symbol subprocess queries.
-(cd ~/linux && cscope -b -c -q -k)
+# 4. Build the cscope database in the kernel tree. The -R flag is required:
+#    without it cscope only scans the top-level directory and finds nothing.
+#    The -c flag produces an uncompressed cross-reference, which lets
+#    KernelSurgeon parse the database in a single pass instead of falling
+#    back to per-symbol subprocess queries.
+(cd ~/linux && cscope -b -c -q -k -R)
 
 # 5. Set the Anthropic API key — never commit it to a file
 export ANTHROPIC_API_KEY='your-key-here'         # bash / zsh
@@ -797,4 +798,3 @@ rich                     # optional — enables live mapping display
 - **Embedding-based CVE-anchored retrieval.** For each current function,
   retrieve K-nearest neighbors among pre-fix functions; high similarity
   raises the prior.
-]

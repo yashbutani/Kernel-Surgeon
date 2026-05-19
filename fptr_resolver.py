@@ -1566,7 +1566,11 @@ class FunctionPointerResolver:
             return local_regs, local_disps
 
         # Fan out across threads
+        if not files:
+            print("    No files to scan")
+            return
         n_workers = min(os.cpu_count() or 4, len(files), 16)
+        n_workers = max(n_workers, 1)
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
             futures = {pool.submit(_process_file, f): f for f in files}
             for future in as_completed(futures):

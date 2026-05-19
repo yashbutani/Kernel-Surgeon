@@ -62,17 +62,17 @@ class PoCGenerator:
     """
 
     SYSTEM_PROMPT = """\
-You are a Linux kernel exploit developer writing proof-of-concept code for
+You are an expert Linux kernel exploit developer writing proof-of-concept code for
 authorized security research and vulnerability disclosure.
 
 Your PoCs are:
 - Written in C using standard Linux userspace headers
-- Minimal and focused: they trigger the vulnerability, not weaponize it
+- Minimal and focused: they trigger the vulnerability and weaponize it as an attacker would
 - Well-commented so a reviewer can understand each step
 - Realistic: they use actual syscalls / ioctls that reach the vulnerable path
-- Safe by default: they crash the kernel or print a warning, not escalate silently
+- Thorough and Nuanced: avoid crashing the kernel if possible. Focus on weaponzing logic bugs to subtly and silently bypass checks. Demonstrate the fullest capability this vulnerability allows you to preform.  
 
-You understand the Linux kernel exploit primitives:
+You understand the full breadth of Linux kernel exploit primitives and exploit chains:
 - Heap spray via userfaultfd, pipe_buffer, msg_msg, shm, mmap
 - Race condition triggering via pthread, userfaultfd page faults
 - Stack overflow detection via KASAN / slab poisoning patterns
@@ -105,7 +105,11 @@ Linux kernel vulnerability in a test environment.
 
 6. **Cleanup**: Close file descriptors, free memory.
 
-7. **Makefile stub**: End with a comment block:
+7. **No backslash continuation in function bodies**: NEVER end a line inside a
+   function with `\`.  Backslash line continuation is ONLY valid inside `#define`
+   macros.  Multi-line comments must use `/* ... */` spanning lines normally.
+
+8. **Makefile stub**: End with a comment block:
    ```
    // Build: gcc -o poc poc.c -lpthread
    // Run:   ./poc
@@ -258,7 +262,7 @@ Do NOT explain the changes in prose — just return the fixed JSON.
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=system,
                 messages=[{"role": "user", "content": user_content}],
             )
@@ -266,6 +270,8 @@ Do NOT explain the changes in prose — just return the fixed JSON.
             if usage and getattr(usage, "cache_read_input_tokens", 0):
                 print(f"    [poc cache] read={usage.cache_read_input_tokens} "
                       f"created={getattr(usage, 'cache_creation_input_tokens', 0)}")
+            if getattr(response, "stop_reason", None) == "max_tokens":
+                print("    [poc] WARNING: response truncated at max_tokens — closing braces will be auto-appended")
             return response.content[0].text
         except anthropic.APIError as e:
             print(f"    [poc] API error: {e}")
@@ -350,13 +356,58 @@ Generate a minimal, compilable C PoC for this vulnerability.
     def _clean_code(code: str) -> str:
         """Strip markdown fences and leading prose from LLM-generated C code.
 
-        Two common failure modes:
-        1. The ``code`` JSON field value itself contains ``` ```c ... ``` ```
-           fences (the LLM double-wrapped the code).
+        Three common failure modes:
+        1. The ``code`` JSON field value itself contains ```c ... ``` fences
+           (the LLM double-wrapped the code).
         2. The field starts with prose text ("Looking at this vulnerability...")
            before the actual C code begins.
+        3. The ``code`` field contains a ```json blob (double-JSON wrapping) —
+           extract the inner JSON and pull the ``code`` field from it.
         """
         import re
+        import json as _json
+
+        # 0. Handle ```json fences (double-JSON wrapping)
+        json_fence = re.search(r'```json\s*\n([\s\S]*?)(?:\n```|$)', code)
+        if json_fence:
+            json_text = json_fence.group(1)
+            extracted = False
+
+            # Strategy A: full JSON parse
+            try:
+                inner = _json.loads(json_text)
+                if isinstance(inner, dict) and "code" in inner:
+                    code = inner["code"]
+                    extracted = True
+            except Exception:
+                pass
+
+            # Strategy B: regex-walk the "code" field value (handles
+            # malformed JSON where json.loads chokes on other fields)
+            if not extracted:
+                code_key = re.search(r'"code"\s*:\s*"', json_text)
+                if code_key:
+                    val_start = code_key.end()
+                    i = val_start
+                    while i < len(json_text):
+                        if json_text[i] == '\\' and i + 1 < len(json_text):
+                            i += 2  # skip escaped char
+                        elif json_text[i] == '"':
+                            break
+                        else:
+                            i += 1
+                    raw_val = json_text[val_start:i]
+                    code = (raw_val
+                            .replace('\\n', '\n')
+                            .replace('\\t', '\t')
+                            .replace('\\"', '"')
+                            .replace('\\/', '/')
+                            .replace('\\\\', '\\'))
+                    extracted = True
+
+            # Strategy C: strip the fence, let steps 1+2 find C code
+            if not extracted:
+                code = json_text
 
         # 1. Strip leading/trailing markdown code fences if present
         # Handles: ```c, ```C, ```cpp, or plain ```
@@ -373,6 +424,138 @@ Generate a minimal, compilable C PoC for this vulnerability.
         )
         if c_start and c_start.start() > 0:
             code = code[c_start.start():]
+
+        # 3. Strip backslash line continuation outside #define macros.
+        # LLMs sometimes append \ to lines inside function bodies, which is only
+        # valid inside macro definitions and causes "stray '\'" compile errors.
+        cleaned_lines = []
+        in_macro = False
+        for line in code.split('\n'):
+            stripped = line.rstrip()
+            if stripped.lstrip().startswith('#define'):
+                in_macro = True
+            if in_macro:
+                cleaned_lines.append(line)
+                if not stripped.endswith('\\'):
+                    in_macro = False  # macro body ended
+            else:
+                # Outside a macro: strip trailing backslash
+                if stripped.endswith('\\'):
+                    line = stripped[:-1]
+                cleaned_lines.append(line)
+        code = '\n'.join(cleaned_lines)
+
+        # 4. Close unclosed braces / parentheses (truncated LLM responses).
+        # Count unmatched openers and append the corresponding closers so gcc
+        # at least sees a structurally complete translation unit.
+        open_braces = 0
+        open_parens = 0
+        in_string = False
+        in_char = False
+        in_line_comment = False
+        in_block_comment = False
+        prev = ''
+        for ch in code:
+            if in_line_comment:
+                if ch == '\n':
+                    in_line_comment = False
+            elif in_block_comment:
+                if prev == '*' and ch == '/':
+                    in_block_comment = False
+            elif in_string:
+                if ch == '"' and prev != '\\':
+                    in_string = False
+            elif in_char:
+                if ch == "'" and prev != '\\':
+                    in_char = False
+            else:
+                if ch == '/' and prev == '/':
+                    in_line_comment = True
+                elif ch == '*' and prev == '/':
+                    in_block_comment = True
+                elif ch == '"':
+                    in_string = True
+                elif ch == "'":
+                    in_char = True
+                elif ch == '{':
+                    open_braces += 1
+                elif ch == '}':
+                    open_braces = max(0, open_braces - 1)
+                elif ch == '(':
+                    open_parens += 1
+                elif ch == ')':
+                    open_parens = max(0, open_parens - 1)
+            prev = ch
+
+        # Only apply structural repairs if something is actually unclosed
+        needs_repair = (in_block_comment or in_string or in_char
+                        or open_parens > 0 or open_braces > 0)
+        if needs_repair:
+            # Close any unterminated string/char literal
+            if in_string:
+                code += '"'
+            if in_char:
+                code += "'"
+            # Close any unterminated block comment
+            if in_block_comment:
+                code += ' */'
+            # If code ends mid-expression (e.g. "x ="), supply a placeholder
+            last_line = code.rstrip().split('\n')[-1].rstrip()
+            if last_line.endswith('=') or last_line.endswith(','):
+                code += ' 0'
+            # Ensure last statement is terminated
+            last_char = code.rstrip()[-1] if code.rstrip() else ''
+            if last_char not in (';', '{', '}', '/', '*', ':'):
+                code += ';'
+            # Close unclosed parens, then braces
+            code += ')' * open_parens
+            if open_parens > 0:
+                code += ';'
+            code += '\n' + '}\n' * open_braces
+
+        # 5. Fix literal newlines inside C string literals.
+        # LLMs sometimes embed actual newline characters inside string literals
+        # (e.g. when the JSON \n escape is decoded as a real newline and then
+        # placed verbatim into the code field).  C does not allow unescaped
+        # newlines inside string literals — replace them with the \n escape.
+        fixed = []
+        in_str = False
+        in_block_comment = False
+        in_line_comment = False
+        prev_ch = ''
+        for ch in code:
+            if in_line_comment:
+                fixed.append(ch)
+                if ch == '\n':
+                    in_line_comment = False
+            elif in_block_comment:
+                fixed.append(ch)
+                if prev_ch == '*' and ch == '/':
+                    in_block_comment = False
+            elif in_str:
+                if ch == '\n':
+                    # Literal newline inside string → replace with \n escape
+                    fixed.append('\\')
+                    fixed.append('n')
+                elif ch == '"' and prev_ch != '\\':
+                    in_str = False
+                    fixed.append(ch)
+                else:
+                    fixed.append(ch)
+            else:
+                if prev_ch == '/' and ch == '/':
+                    in_line_comment = True
+                    fixed.append(ch)
+                elif prev_ch == '/' and ch == '*':
+                    in_block_comment = True
+                    fixed.append(ch)
+                elif ch == '"':
+                    in_str = True
+                    fixed.append(ch)
+                else:
+                    fixed.append(ch)
+            prev_ch = ch
+        code = ''.join(fixed)
 
         return code.strip()
 
@@ -496,7 +679,7 @@ Generate a minimal, compilable C PoC for this vulnerability.
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=system,
                 messages=[{"role": "user", "content": user_content}],
             )

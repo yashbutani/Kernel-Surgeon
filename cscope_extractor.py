@@ -194,7 +194,7 @@ class CscopeExtractor:
                     fh.write(str(hfile) + "\n")
 
         subprocess.run(
-            ["cscope", "-b", "-q", "-k"],
+            ["cscope", "-b", "-c", "-q", "-k"],
             cwd=self.kernel_path,
             capture_output=True,
             timeout=600,

@@ -87,7 +87,7 @@ class WorkStealingPool:
                     return self._queues[victim_id].pop()   # steal from back
         return None
 
-    def _worker(self, worker_id: int, fn: Callable) -> None:
+    def _worker(self, worker_id: int, fn: Callable, result_callback=None) -> None:
         """Worker loop: process own queue, then steal, then exit."""
         while True:
             # Try own queue first (from front — FIFO within worker)
@@ -113,6 +113,10 @@ class WorkStealingPool:
             with self._results_lock:
                 self._results.append(result)
 
+            # Fire callback immediately so callers can stream results
+            if result_callback is not None:
+                result_callback(result)
+
             with self._progress_lock:
                 self._done += 1
                 done = self._done
@@ -129,9 +133,15 @@ class WorkStealingPool:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, fn: Callable) -> list[Any]:
+    def run(self, fn: Callable, result_callback=None) -> list[Any]:
         """
         Execute *fn* on every task using work-stealing parallelism.
+
+        If *result_callback* is provided it is called immediately in the
+        worker thread each time a result is produced, before the next task
+        is picked up.  This enables streaming pipelines where downstream
+        stages (verification, PoC generation) can start on the first
+        finding while other candidates are still being analysed.
 
         Returns results in completion order (NOT necessarily task order).
         """
@@ -139,7 +149,9 @@ class WorkStealingPool:
               f"{self._total} tasks, rate={self._rate_limit_rps:.1f} RPS")
 
         threads = [
-            threading.Thread(target=self._worker, args=(i, fn), daemon=True)
+            threading.Thread(
+                target=self._worker, args=(i, fn, result_callback), daemon=True
+            )
             for i in range(self.n_workers)
         ]
         for t in threads:

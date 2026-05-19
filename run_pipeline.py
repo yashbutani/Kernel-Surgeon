@@ -33,7 +33,9 @@ Usage:
 import argparse
 import json
 import os
+import queue as _queue
 import sys
+import threading
 import time
 
 # Root-level files live alongside the kernelsurgeon/ package.
@@ -410,6 +412,167 @@ def run_post_analysis(
 
 
 # ============================================================================
+# Streaming pipeline: Layers 2-6 concurrently
+# ============================================================================
+
+def run_streaming_pipeline(
+    graph: KernelGraph,
+    candidates: list[CandidateFunction],
+    args,
+    supervisor: "RLMSupervisor | None" = None,
+) -> tuple[list[VulnerabilityFinding], dict, list[VulnerabilityReport], str]:
+    """
+    Streaming Layers 2-6: as each candidate is analysed, positive findings
+    are immediately forwarded to the verifier → PoC → report pipeline via a
+    background consumer thread.  This overlaps analysis of later candidates
+    with verification of earlier ones instead of waiting for all N candidates
+    to finish before post-processing begins.
+
+    Returns (all_findings, context_pkgs, all_reports, reports_dir).
+    """
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("[!] No API key — skipping agent analysis.")
+        return [], {}, [], ""
+
+    run_ts = time.strftime("%Y%m%d_%H%M%S")
+    reports_dir = os.path.join(args.output_dir, "reports", f"run_{run_ts}")
+
+    analyzer = GraphAnalyzer(graph)
+    agent = VulnAgent(
+        kernel_graph=graph,
+        kernel_path=args.kernel_path,
+        analyzer=analyzer,
+        model=args.model,
+        max_iterations=args.max_iter,
+        supervisor=supervisor,
+    )
+    verifier = VerifierAgent(model=args.model)
+    poc_gen   = PoCGenerator(model=args.model)
+    report_gen = ReportGenerator(output_dir=reports_dir)
+
+    top_candidates = candidates[: args.top_n]
+
+    # Pre-assemble context packages
+    assembler = agent.assembler
+    context_pkgs: dict = {}
+    print("[*] Assembling context packages...")
+    for c in top_candidates:
+        context_pkgs[c.name] = assembler.assemble(c)
+
+    # Shared state (all_findings written by pool workers; all_reports by consumer)
+    all_findings: list[VulnerabilityFinding] = []
+    all_reports:  list[VulnerabilityReport]  = []
+    findings_lock = threading.Lock()
+    _DONE = object()   # sentinel
+
+    # Queue of (VulnerabilityFinding, ContextPackage) tuples for the consumer
+    work_q: _queue.Queue = _queue.Queue()
+
+    def on_finding(finding: VulnerabilityFinding) -> None:
+        """Called by each pool worker immediately when a result is ready."""
+        with findings_lock:
+            all_findings.append(finding)
+        if finding.is_vulnerable:
+            pkg = context_pkgs.get(finding.candidate_name)
+            if pkg:
+                work_q.put((finding, pkg))
+
+    def consumer() -> None:
+        """
+        Single background thread: verify → PoC → report as findings arrive.
+        Runs concurrently with the WorkStealingPool producers.
+        """
+        while True:
+            item = work_q.get()
+            if item is _DONE:
+                break
+            finding, pkg = item
+
+            print(f"\n--- Post-analysis: {finding.candidate_name} ---")
+
+            # Layer 4: Verify
+            verified = verifier.verify(finding, pkg)
+            time.sleep(1)
+
+            # Layer 5: PoC (confirmed only)
+            poc = None
+            if verified.is_confirmed:
+                poc = poc_gen.generate(verified, pkg, supervisor=supervisor)
+                time.sleep(1)
+
+            # Layer 6: Report
+            report = report_gen.generate(verified, poc, pkg, finding)
+            report_gen.save(report)
+            all_reports.append(report)
+
+    # Start consumer before producers so it's ready immediately
+    consumer_thread = threading.Thread(target=consumer, daemon=True, name="post-analysis")
+    consumer_thread.start()
+
+    print(f"\n[*] Streaming pipeline: {len(top_candidates)} candidates "
+          f"with {args.workers} worker(s) — verify+PoC starts as findings arrive")
+
+    pool = WorkStealingPool(
+        n_workers=args.workers,
+        tasks=top_candidates,
+        rate_limit_rps=args.rate_limit,
+    )
+    pool.run(agent.analyze_candidate, result_callback=on_finding)
+
+    # Drain the queue: let consumer finish any in-flight post-analysis
+    work_q.put(_DONE)
+    consumer_thread.join()
+
+    # Save raw findings (same as run_agent does)
+    findings_path = os.path.join(args.output_dir, "findings.json")
+    agent.save_findings(findings_path)
+    agent.save_generated_queries(findings_path.replace(".json", "_queries.json"))
+
+    # Document negative findings with stub reports
+    negative_findings = [f for f in all_findings if not f.is_vulnerable]
+    if negative_findings:
+        print(f"\n    {len(negative_findings)} negative findings → report only")
+    for finding in negative_findings:
+        pkg = context_pkgs.get(finding.candidate_name)
+        if pkg is None:
+            continue
+        stub_verified = VerifiedFinding(
+            candidate_name=finding.candidate_name,
+            candidate_file=finding.candidate_file,
+            candidate_subsystem=finding.candidate_subsystem,
+            is_confirmed=False,
+            false_positive_reason="Primary agent did not flag as vulnerable",
+            severity="INFORMATIONAL",
+            cvss_score=0.0,
+            cwe_id="unknown",
+            attack_vector="LOCAL",
+            attack_complexity="HIGH",
+            privileges_required="HIGH",
+            user_interaction="NONE",
+            exploitability="LOW",
+            impact="",
+            verification_notes="Skipped verification (primary agent: not vulnerable)",
+            verifier_confidence="LOW",
+            remediation="",
+        )
+        report = report_gen.generate(stub_verified, None, pkg, finding)
+        report_gen.save(report)
+        all_reports.append(report)
+
+    report_gen.generate_index(all_reports)
+
+    positive = [f for f in all_findings if f.is_vulnerable]
+    confirmed = [r for r in all_reports if r.is_verified]
+    sv_stats = agent.state.total_api_calls if hasattr(agent, "state") else "?"
+    print(f"\n  Candidates analysed  : {len(all_findings)}")
+    print(f"  Potentially vulnerable: {len(positive)}")
+    print(f"  Confirmed vulns      : {len(confirmed)}")
+    print(f"  Total API calls      : {sv_stats}")
+
+    return all_findings, context_pkgs, all_reports, reports_dir
+
+
+# ============================================================================
 # Summary printer
 # ============================================================================
 
@@ -597,41 +760,33 @@ Examples:
               f"max_scripts/candidate={supervisor.max_scripts_per_candidate}")
 
     # ------------------------------------------------------------------
-    # Layers 2+3: Agent (runs for both 'research' and 'all')
+    # Layers 2-6: Streaming pipeline (analysis + verify + PoC + report)
     # ------------------------------------------------------------------
     findings: list[VulnerabilityFinding] = []
     context_pkgs: dict = {}
+    reports: list = []
+    reports_dir = ""
 
     if not args.no_agent and candidates:
-        print("\n" + "=" * 60)
-        print("LAYERS 2+3: AGENTIC VULNERABILITY ANALYSIS")
-        print("=" * 60)
-        findings, context_pkgs = run_agent(graph, candidates, args, supervisor=supervisor)
-
-        high_conf = [f for f in findings if f.is_vulnerable and f.confidence == "HIGH"]
-        if high_conf:
-            print(f"\n{'='*60}")
-            print("HIGH-CONFIDENCE FINDINGS (pre-verification)")
-            print(f"{'='*60}")
-            for f in high_conf:
-                print(f"\n  {f.candidate_name} ({f.candidate_file})")
-                print(f"  Type: {f.vulnerability_type}")
-                print(f"  {f.description[:200]}")
-
-    # ------------------------------------------------------------------
-    # Layers 4-6: Verify -> PoC -> Report
-    # ------------------------------------------------------------------
-    if findings and not args.no_verify:
-        print("\n" + "=" * 60)
-        print("LAYERS 4-6: VERIFICATION -> POC -> REPORTS")
-        print("=" * 60)
-        reports, reports_dir = run_post_analysis(findings, context_pkgs, args, supervisor=supervisor)
-
-        confirmed = [r for r in reports if r.is_verified]
-        print(f"\n  Reports written : {len(reports)}")
-        print(f"  Confirmed vulns : {len(confirmed)}")
-        if reports:
-            print(f"  Reports dir     : {reports_dir}")
+        if args.no_verify:
+            # Verification/PoC disabled — run analysis only (original sequential path)
+            print("\n" + "=" * 60)
+            print("LAYERS 2+3: AGENTIC VULNERABILITY ANALYSIS")
+            print("=" * 60)
+            findings, context_pkgs = run_agent(graph, candidates, args, supervisor=supervisor)
+        else:
+            # Streaming: verify+PoC fires as each finding arrives
+            print("\n" + "=" * 60)
+            print("LAYERS 2-6: STREAMING ANALYSIS → VERIFY → POC → REPORT")
+            print("=" * 60)
+            findings, context_pkgs, reports, reports_dir = run_streaming_pipeline(
+                graph, candidates, args, supervisor=supervisor
+            )
+            confirmed = [r for r in reports if r.is_verified]
+            print(f"\n  Reports written : {len(reports)}")
+            print(f"  Confirmed vulns : {len(confirmed)}")
+            if reports_dir:
+                print(f"  Reports dir     : {reports_dir}")
 
     elapsed = time.time() - start_time
     print(f"\n[+] Pipeline complete in {elapsed:.1f}s")
